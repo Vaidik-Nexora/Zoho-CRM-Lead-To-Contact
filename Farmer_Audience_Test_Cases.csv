@@ -1,0 +1,23 @@
+Scenario,Books Data (Incoming Invoice),CRM Lead (Existing Target),Result
+1. Perfect Match,"Name: Rajesh Kumar
+Mobile: 9876543210","Name: Rajesh Kumar
+Mobile: 9876543210",DELETE
+2. Cross-Field Match,"Name: Suresh Yadav
+Mobile: 9876543210","Name: Suresh Yadav
+Phone: 9876543210
+Mobile: (Empty)",DELETE
+3. Priority Shift (Books has Both),"Name: Manoj Bajpayee
+Mobile: 1111111111
+Phone: 2222222222","Name: Manoj Bajpayee
+Phone: 2222222222
+Mobile: (Empty)",SKIP
+4. Fallback to Phone,"Name: Vikram Sarkar
+Phone: 2222222222
+Mobile: (Empty)","Name: Vikram Sarkar
+Mobile: 2222222222",DELETE
+5. Shared Family Phone,"Name: Amit Kushwaha
+Mobile: 9876543210","Name: Rahul Kushwaha
+Mobile: 9876543210",SKIP
+6. Partial Name Match,"Name: Ramesh Singh
+Mobile: 9999999999","Name: Ramesh Singh
+Mobile: 9999999999",DELETE

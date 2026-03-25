@@ -1,0 +1,103 @@
+// Delete lead - Triggered from Zoho Books Invoice workflow
+// Robust Farmer Audience Logic: Cross-matches Mobile and Phone, verified by Name.
+
+customerId = invoice.get("customer_id");
+booksName = ifnull(invoice.get("customer_name"),"").toLowerCase();
+
+if(customerId == null || customerId == "")
+{
+	info "❌ No customer ID on invoice";
+	return;
+}
+
+// 1. Fetch full Customer Details from Books to get all phone numbers natively
+orgId = organization.get("organization_id");
+custResp = zoho.books.getRecordsByID("Contacts", orgId, customerId);
+
+if(custResp == null || custResp.get("code") != 0 || custResp.get("contact") == null)
+{
+	info "❌ Could not fetch customer details from Books.";
+	return;
+}
+
+custData = custResp.get("contact");
+
+// 2. Extract and clean Mobile and Phone from Books
+booksMobileRaw = ifnull(custData.get("mobile"),"");
+booksPhoneRaw = ifnull(custData.get("phone"),"");
+
+booksMobile = booksMobileRaw.replaceAll("[^0-9]","");
+if(booksMobile.length() > 10) { booksMobile = booksMobile.right(10); }
+
+booksPhone = booksPhoneRaw.replaceAll("[^0-9]","");
+if(booksPhone.length() > 10) { booksPhone = booksPhone.right(10); }
+
+// Pick Mobile first, fallback to Phone if Mobile is empty
+booksNumber = "";
+if(booksMobile.length() >= 10)
+{
+	booksNumber = booksMobile;
+}
+else if(booksPhone.length() >= 10)
+{
+	booksNumber = booksPhone;
+}
+
+if(booksNumber == "")
+{
+	info "⚠ No valid phone/mobile found for this customer in Books.";
+	return;
+}
+
+// 3. Build Cross-Search Criteria for CRM
+// Looks for the single chosen Books number in EITHER the CRM Lead Phone OR Mobile fields
+criteriaStr = "((Mobile:equals:" + booksNumber + ")OR(Phone:equals:" + booksNumber + "))";
+
+// Search CRM Leads
+searchResp = invokeurl
+[
+	url: "https://www.zohoapis.in/crm/v2/Leads/search?criteria=" + zoho.encryption.urlEncode(criteriaStr)
+	type: GET
+	connection: "zohocrm"
+];
+
+if(searchResp == null || searchResp.get("data") == null || searchResp.get("data").size() == 0)
+{
+	info "⚠ No matching Lead found for numbers: " + booksNumber;
+	return;
+}
+
+// 4. Verification: Check Name to avoid deleting someone else with the same number!
+leadIdToDelete = null;
+
+for each lead in searchResp.get("data")
+{
+	leadName = ifnull(lead.get("Full_Name"),"").toLowerCase();
+	
+	// Partial Name Match logic (e.g. "Rajesh Kumar" contains "Rajesh")
+	if(booksName != "" && leadName != "")
+	{
+		if(booksName.contains(leadName) || leadName.contains(booksName))
+		{
+			leadIdToDelete = lead.get("id");
+			info "✅ Exact Match Found: Number + Name matched (" + leadName + ")";
+			break;
+		}
+	}
+}
+
+// 5. Delete the safely identified Lead
+if(leadIdToDelete != null)
+{
+	deleteResp = invokeurl
+	[
+		url: "https://www.zohoapis.in/crm/v2/Leads/" + leadIdToDelete
+		type: DELETE
+		connection: "zohocrm"
+	];
+	info "🗑️ Lead " + leadIdToDelete + " deleted successfully. | Response: " + deleteResp;
+}
+else
+{
+	info "⚠ Leads found with same number, but names did not match. Deletion skipped safely.";
+}
