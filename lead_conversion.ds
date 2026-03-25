@@ -32,26 +32,25 @@ if(booksMobile.length() > 10) { booksMobile = booksMobile.right(10); }
 booksPhone = booksPhoneRaw.replaceAll("[^0-9]","");
 if(booksPhone.length() > 10) { booksPhone = booksPhone.right(10); }
 
-// Pick Mobile first, fallback to Phone if Mobile is empty
-booksNumber = "";
-if(booksMobile.length() >= 10)
-{
-	booksNumber = booksMobile;
-}
-else if(booksPhone.length() >= 10)
-{
-	booksNumber = booksPhone;
-}
+searchNumbers = List();
+if(booksMobile.length() >= 10) { searchNumbers.add(booksMobile); }
+if(booksPhone.length() >= 10 && !searchNumbers.contains(booksPhone)) { searchNumbers.add(booksPhone); }
 
-if(booksNumber == "")
+if(searchNumbers.size() == 0)
 {
 	info "⚠ No valid phone/mobile found for this customer in Books.";
 	return;
 }
 
 // 3. Build Cross-Search Criteria for CRM
-// Looks for the single chosen Books number in EITHER the CRM Lead Phone OR Mobile fields
-criteriaStr = "((Mobile:equals:" + booksNumber + ")OR(Phone:equals:" + booksNumber + "))";
+// Looks for BOTH numbers in EITHER the CRM Lead Phone OR Mobile fields
+criteriaStr = "";
+for each num in searchNumbers
+{
+	criteriaStr = criteriaStr + "(Mobile:equals:" + num + ")OR(Phone:equals:" + num + ")OR";
+}
+// Remove the last 'OR' (2 characters)
+criteriaStr = "(" + criteriaStr.subString(0, criteriaStr.length() - 2) + ")";
 
 // Search CRM Leads
 searchResp = invokeurl
@@ -63,7 +62,7 @@ searchResp = invokeurl
 
 if(searchResp == null || searchResp.get("data") == null || searchResp.get("data").size() == 0)
 {
-	info "⚠ No matching Lead found for numbers: " + booksNumber;
+	info "⚠ No matching Lead found for numbers: " + searchNumbers;
 	return;
 }
 
